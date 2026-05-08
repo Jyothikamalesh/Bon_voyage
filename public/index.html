@@ -41,6 +41,16 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <main class="main-container">
 
+    <!-- ── TAB SWITCHER ─────────────────────────────────────── -->
+    <div class="tab-switcher">
+      <button class="tab-btn active" id="tab-scan">
+        <span>📷</span> Scan Landmark
+      </button>
+      <button class="tab-btn" id="tab-explore">
+        <span>📍</span> Explore Nearby
+      </button>
+    </div>
+
     <!-- ── CAMERA SECTION ────────────────────────────────────── -->
     <section class="camera-section" id="camera-section">
       <div class="camera-card" id="camera-card">
@@ -88,6 +98,46 @@
         <!-- Hidden file input -->
         <input type="file" id="file-input" accept="image/*" capture="environment" style="display:none" />
       </div>
+    </section>
+
+    <!-- ── EXPLORE NEARBY SECTION ───────────────────────────── -->
+    <section class="explore-section" id="explore-section" style="display:none">
+
+      <!-- Step 1: prompt for location -->
+      <div class="explore-prompt" id="explore-prompt">
+        <div class="explore-prompt-icon">🗺️</div>
+        <h2 class="explore-prompt-title">Explore What's Around You</h2>
+        <p class="explore-prompt-desc">Find top restaurants &amp; attractions near your current location</p>
+        <button class="btn btn-primary btn-locate" id="locate-btn">
+          <span>📍</span><span>Use My Location</span>
+        </button>
+      </div>
+
+      <!-- Step 2: loading -->
+      <div class="explore-loading" id="explore-loading" style="display:none">
+        <div class="explore-spinner-wrap">
+          <div class="spinner"></div>
+          <div class="spinner-inner"></div>
+        </div>
+        <p class="explore-loading-text">Finding places near you…</p>
+      </div>
+
+      <!-- Step 3: map + places -->
+      <div class="explore-loaded" id="explore-loaded" style="display:none">
+        <div class="explore-map-wrapper">
+          <div id="explore-map"></div>
+        </div>
+        <div class="explore-filter-row">
+          <button class="filter-btn active" data-filter="all">All</button>
+          <button class="filter-btn" data-filter="restaurant">🍴 Restaurants</button>
+          <button class="filter-btn" data-filter="attraction">🏛️ Attractions</button>
+        </div>
+        <div class="explore-grid" id="explore-grid"></div>
+        <button class="btn btn-ghost btn-refresh" id="refresh-location-btn">
+          📍 Refresh Location
+        </button>
+      </div>
+
     </section>
 
     <!-- ── LOADING SECTION ───────────────────────────────────── -->

@@ -14,6 +14,9 @@ let currentFacingMode = 'environment'; // Default to rear camera
 let mapsLoaded = false;
 let mapInstance = null;
 let googleMapsApiKey = null;
+let activeTab = 'scan';
+let exploreMapInstance = null;
+let currentUserLocation = null;
 
 // DOM Elements
 const els = {
@@ -56,15 +59,13 @@ const els = {
 
 // ─── Initialization ──────────────────────────────────────────
 async function init() {
+  // Fetch config non-blocking — camera works even if backend is down
+  fetchJson(`${API_BASE}/config`)
+    .then(config => { googleMapsApiKey = config.mapsApiKey; })
+    .catch(err => console.warn('Config fetch failed (Maps may not work):', err.message));
+
   try {
-    // 1. Fetch config (Maps API Key)
-    const config = await fetchJson(`${API_BASE}/config`);
-    googleMapsApiKey = config.mapsApiKey;
-    
-    // 2. Start Camera
     await startCamera();
-    
-    // 3. Bind Events
     bindEvents();
   } catch (err) {
     showError('Initialization Failed', 'Please ensure camera permissions are granted and try again.');
@@ -82,6 +83,22 @@ function bindEvents() {
   els.nearbyBtn.onclick = toggleNearby;
   els.resetBtn.onclick = resetApp;
   els.errorRetryBtn.onclick = resetApp;
+
+  document.getElementById('tab-scan').onclick = () => switchTab('scan');
+  document.getElementById('tab-explore').onclick = () => switchTab('explore');
+  document.getElementById('locate-btn').onclick = locateAndExplore;
+  document.getElementById('refresh-location-btn').onclick = locateAndExplore;
+
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const filter = btn.dataset.filter;
+      document.querySelectorAll('.explore-card').forEach(card => {
+        card.classList.toggle('hidden', filter !== 'all' && card.dataset.category !== filter);
+      });
+    };
+  });
 }
 
 // ─── Camera Logic ───────────────────────────────────────────
@@ -90,17 +107,16 @@ async function startCamera() {
     stream.getTracks().forEach(track => track.stop());
   }
 
-  const constraints = {
-    video: {
-      facingMode: currentFacingMode,
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    },
-    audio: false
-  };
-
   try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    // Try requested facing mode first, fall back to any camera (desktop has no rear camera)
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: currentFacingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false
+      });
+    } catch {
+      stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
     els.video.srcObject = stream;
     switchMode('camera');
   } catch (err) {
@@ -261,9 +277,29 @@ function toggleNearby() {
   }
 }
 
+// ─── Tab Switcher ───────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.getElementById('tab-scan').classList.toggle('active', tab === 'scan');
+  document.getElementById('tab-explore').classList.toggle('active', tab === 'explore');
+  const exploreSection = document.getElementById('explore-section');
+
+  if (tab === 'explore') {
+    els.cameraSection.style.display = 'none';
+    els.loadingSection.style.display = 'none';
+    els.resultsSection.style.display = 'none';
+    els.errorSection.style.display = 'none';
+    exploreSection.style.display = 'block';
+  } else {
+    exploreSection.style.display = 'none';
+    switchMode('camera');
+  }
+}
+
 // ─── UI Utilities ───────────────────────────────────────────
 function switchMode(mode) {
   // Hide all sections
+  document.getElementById('explore-section').style.display = 'none';
   els.videoWrapper.style.display = 'none';
   els.photoPreviewWrapper.style.display = 'none';
   els.cameraControls.style.display = 'none';
@@ -424,6 +460,146 @@ const darkMapStyle = [
     "stylers": [{ "color": "#17263c" }]
   }
 ];
+
+// ─── Explore Nearby Logic ───────────────────────────────────
+async function locateAndExplore() {
+  const prompt = document.getElementById('explore-prompt');
+  const loading = document.getElementById('explore-loading');
+  const loaded = document.getElementById('explore-loaded');
+
+  prompt.style.display = 'none';
+  loading.style.display = 'block';
+  loaded.style.display = 'none';
+
+  try {
+    const position = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+    );
+
+    const { latitude: lat, longitude: lng } = position.coords;
+    currentUserLocation = { lat, lng };
+
+    if (!mapsLoaded) await loadGoogleMaps();
+
+    const [nearbyData] = await Promise.all([
+      fetchJson(`${API_BASE}/nearby`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lat, lng, radius: 1500 })
+      })
+    ]);
+
+    loading.style.display = 'none';
+    loaded.style.display = 'block';
+
+    // Reset filter to "All"
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.filter-btn[data-filter="all"]').classList.add('active');
+
+    renderExploreMap(lat, lng, nearbyData.places);
+    renderExplorePlaces(nearbyData.places);
+
+  } catch (err) {
+    console.error('Explore error:', err);
+    loading.style.display = 'none';
+    prompt.style.display = 'block';
+    prompt.querySelector('.explore-prompt-desc').textContent =
+      err.code === 1
+        ? 'Location access denied. Please allow location in your browser settings.'
+        : 'Could not get your location. Please try again.';
+  }
+}
+
+function renderExploreMap(lat, lng, places) {
+  const center = { lat, lng };
+  exploreMapInstance = new google.maps.Map(document.getElementById('explore-map'), {
+    center,
+    zoom: 15,
+    styles: darkMapStyle,
+    disableDefaultUI: true,
+    zoomControl: true,
+  });
+
+  // User location marker
+  new google.maps.Marker({
+    position: center,
+    map: exploreMapInstance,
+    title: 'You are here',
+    icon: {
+      path: google.maps.SymbolPath.CIRCLE,
+      scale: 10,
+      fillColor: '#6366f1',
+      fillOpacity: 1,
+      strokeColor: '#fff',
+      strokeWeight: 2,
+    }
+  });
+
+  // Place markers
+  places.forEach(place => {
+    if (!place.lat || !place.lng) return;
+    const marker = new google.maps.Marker({
+      position: { lat: place.lat, lng: place.lng },
+      map: exploreMapInstance,
+      title: place.name,
+      label: {
+        text: place.category === 'restaurant' ? '🍴' : '🏛️',
+        fontSize: '16px',
+      }
+    });
+
+    const infoWindow = new google.maps.InfoWindow({
+      content: `<div style="color:#000;font-family:sans-serif;font-size:13px;padding:4px 6px">
+        <strong>${place.name}</strong><br>
+        ★ ${place.rating || 'N/A'}
+      </div>`
+    });
+    marker.addListener('click', () => infoWindow.open(exploreMapInstance, marker));
+  });
+}
+
+function renderExplorePlaces(places) {
+  const grid = document.getElementById('explore-grid');
+  grid.innerHTML = '';
+
+  if (!places.length) {
+    grid.innerHTML = '<p style="color:var(--text-muted);grid-column:1/-1;text-align:center;padding:2rem">No places found nearby.</p>';
+    return;
+  }
+
+  places.forEach((place, i) => {
+    const card = document.createElement('div');
+    card.className = 'explore-card';
+    card.dataset.category = place.category;
+    card.style.animationDelay = `${i * 0.08}s`;
+
+    const photo = place.photoUrl || `https://via.placeholder.com/400x220/1a1a2e/6366f1?text=${encodeURIComponent(place.category === 'restaurant' ? '🍴' : '🏛️')}`;
+    const rating = place.rating ? `<span class="explore-card-rating">★ ${place.rating}</span>` : '';
+    const typeLabel = place.category === 'restaurant' ? '🍴 Restaurant' : '🏛️ Attraction';
+
+    card.innerHTML = `
+      <img src="${photo}" class="explore-card-img" alt="${place.name}" loading="lazy" onerror="this.src='https://via.placeholder.com/400x220/1a1a2e/6366f1?text=No+Photo'">
+      <div class="explore-card-body">
+        <div class="explore-card-name" title="${place.name}">${place.name}</div>
+        <div class="explore-card-meta">
+          ${rating}
+          <span class="explore-card-type">${typeLabel}</span>
+        </div>
+      </div>
+    `;
+
+    if (place.lat && place.lng) {
+      card.style.cursor = 'pointer';
+      card.onclick = () => {
+        exploreMapInstance.panTo({ lat: place.lat, lng: place.lng });
+        exploreMapInstance.setZoom(17);
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      };
+    }
+
+    grid.appendChild(card);
+  });
+}
 
 // Start the app
 init();

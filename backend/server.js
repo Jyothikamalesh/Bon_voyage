@@ -23,7 +23,7 @@ const getVisionClient = () => {
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Gemini 1.5 Flash — cheapest + smart
-const geminiModel = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+const geminiModel = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
 
 // ─── Middleware ──────────────────────────────────────────────
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
@@ -262,6 +262,6 @@ app.use((err, req, res, _next) => {
 // ─── Start ───────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`🚀 Bon Voyage backend running on port ${PORT}`);
-  console.log(`   Gemini model : gemini-1.5-flash`);
+  console.log(`   Gemini model : gemini-2.5-flash`);
   console.log(`   Vision client: lazy (ADC)`);
 });

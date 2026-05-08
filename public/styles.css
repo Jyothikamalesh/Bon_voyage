@@ -548,3 +548,215 @@ em {
   .tagline { font-size: 0.75rem; }
   .main-container { padding-bottom: calc(2rem + var(--safe-area-inset-bottom)); }
 }
+
+/* ── Tab Switcher ── */
+.tab-switcher {
+  display: flex;
+  gap: 0.5rem;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  padding: 0.35rem;
+  margin-bottom: 1.25rem;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 0.65rem 1rem;
+  border: none;
+  border-radius: 1rem;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-muted);
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: all 0.25s ease;
+}
+
+.tab-btn.active {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: #fff;
+  box-shadow: 0 4px 15px rgba(99,102,241,0.35);
+}
+
+/* ── Explore Section ── */
+.explore-section {
+  animation: fadeIn 0.3s ease;
+}
+
+.explore-prompt {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 2rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  backdrop-filter: blur(20px);
+}
+
+.explore-prompt-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1rem;
+  line-height: 1;
+}
+
+.explore-prompt-title {
+  font-size: 1.4rem;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.explore-prompt-desc {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin-bottom: 2rem;
+  line-height: 1.6;
+}
+
+.btn-locate {
+  gap: 0.5rem;
+  font-size: 1rem;
+  padding: 1rem 2rem;
+  margin: 0 auto;
+}
+
+/* Explore loading */
+.explore-loading {
+  text-align: center;
+  padding: 4rem 1.5rem;
+}
+
+.explore-spinner-wrap {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 1.5rem;
+}
+
+.explore-loading-text {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+/* Explore map */
+.explore-map-wrapper {
+  border-radius: 1.5rem;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  margin-bottom: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+#explore-map {
+  height: 280px;
+  width: 100%;
+}
+
+/* Filter row */
+.explore-filter-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  scrollbar-width: none;
+}
+.explore-filter-row::-webkit-scrollbar { display: none; }
+
+.filter-btn {
+  flex-shrink: 0;
+  padding: 0.5rem 1.1rem;
+  border: 1px solid var(--glass-border);
+  border-radius: 2rem;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+}
+
+/* Explore grid */
+.explore-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+}
+
+.explore-card {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  animation: slideUp 0.4s ease-out both;
+}
+
+.explore-card:active { transform: scale(0.97); }
+
+.explore-card-img {
+  width: 100%;
+  height: 110px;
+  object-fit: cover;
+  display: block;
+}
+
+.explore-card-body {
+  padding: 0.75rem;
+}
+
+.explore-card-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 0.3rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.explore-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.explore-card-rating {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.explore-card-type {
+  font-size: 0.7rem;
+  background: rgba(255,255,255,0.07);
+  padding: 0.15rem 0.5rem;
+  border-radius: 1rem;
+}
+
+.explore-card.hidden { display: none; }
+
+.btn-refresh {
+  display: block;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  padding: 0.5rem 1.25rem;
+}
