@@ -1,0 +1,17 @@
+# Environment variables
+.env
+.env.local
+backend/.env
+
+# Google Cloud Service Account keys
+*.json
+!firebase.json
+!package.json
+
+# Dependencies
+node_modules/
+.DS_Store
+
+# Firebase logs
+firebase-debug.log*
+.firebase/
