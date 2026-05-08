@@ -1,0 +1,20 @@
+name: PR Preview
+
+on:
+  pull_request:
+
+jobs:
+  preview:
+    name: Hosting Preview
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Firebase Hosting Preview
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_BONVOYAGE_45FCE }}
+          projectId: bonvoyage-45fce
+          # This automatically creates a preview channel and comments on the PR
