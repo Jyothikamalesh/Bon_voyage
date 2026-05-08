@@ -10,6 +10,20 @@ const multer = require('multer');
 const axios = require('axios');
 const vision = require('@google-cloud/vision');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const crypto = require('crypto');
+
+// ─── Named Constants ─────────────────────────────────────────
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const MAX_IMAGE_DECODED_BYTES = 7 * 1024 * 1024;
+const NEARBY_RADIUS_DEFAULT = 1000;
+const FACTS_COUNT = 5;
+const MAX_LANDMARK_LENGTH = 300;
+const RATE_LIMIT_MAX = 60;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const FACTS_CACHE_TTL_MS = 60 * 60 * 1000;
+
+// ─── In-memory facts cache ────────────────────────────────────
+const factsCache = new Map();
 
 // ─── Init ────────────────────────────────────────────────────
 const app = express();
@@ -43,20 +57,29 @@ app.use(cors({
 
 app.use(express.json({ limit: '10mb' }));
 
+// Attach a unique request ID to every response
+app.use((req, res, next) => {
+  res.setHeader('X-Request-ID', crypto.randomUUID());
+  next();
+});
+
 // Rate limiting — 60 requests per minute per IP
 const limiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please slow down.' },
 });
 app.use('/api/', limiter);
 
+// Disable browser/proxy caching for all API responses
+app.use('/api/', (req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+
 // Multer for multipart image uploads (in-memory)
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (_, file, cb) => {
     if (file.mimetype.startsWith('image/')) cb(null, true);
     else cb(new Error('Only image files are accepted'));
@@ -64,9 +87,19 @@ const upload = multer({
 });
 
 // ─── Health check ────────────────────────────────────────────
+/**
+ * GET /health
+ * Simple liveness probe — returns service name and status.
+ */
 app.get('/health', (_, res) => res.json({ status: 'ok', service: 'bon-voyage-backend' }));
 
 // ─── POST /api/identify ──────────────────────────────────────
+/**
+ * POST /api/identify
+ * Accepts a multipart "image" field or JSON { imageBase64 }.
+ * Calls Google Cloud Vision landmark detection and returns the top match.
+ * @returns {{ landmark, lat, lng, confidence, allMatches }}
+ */
 app.post('/api/identify', upload.single('image'), async (req, res) => {
   if (process.env.MOCK_MODE === 'true') {
     return res.json({
@@ -89,6 +122,10 @@ app.post('/api/identify', upload.single('image'), async (req, res) => {
       imageBuffer = Buffer.from(base64, 'base64');
     } else {
       return res.status(400).json({ error: 'No image provided. Send multipart "image" field or JSON "imageBase64".' });
+    }
+
+    if (imageBuffer.length > MAX_IMAGE_DECODED_BYTES) {
+      return res.status(400).json({ error: 'Image too large. Maximum decoded size is 7MB.' });
     }
 
     const [result] = await getVisionClient().landmarkDetection({ image: { content: imageBuffer } });
@@ -120,8 +157,13 @@ app.post('/api/identify', upload.single('image'), async (req, res) => {
 });
 
 // ─── POST /api/facts ─────────────────────────────────────────
-// Accepts: JSON { landmark }
-// Returns: { facts: string[] }   — 5 facts, each ~3 sentences
+/**
+ * POST /api/facts
+ * Accepts: JSON { landmark }
+ * Generates 5 interesting historical facts via Gemini.
+ * Results are cached in-memory for FACTS_CACHE_TTL_MS.
+ * @returns {{ facts: string[], landmark: string, cached?: boolean }}
+ */
 app.post('/api/facts', async (req, res) => {
   if (process.env.MOCK_MODE === 'true') {
     return res.json({
@@ -141,7 +183,21 @@ app.post('/api/facts', async (req, res) => {
     return res.status(400).json({ error: 'Missing or invalid "landmark" field.' });
   }
 
-  const prompt = `You are a friendly travel guide. Tell me 5 interesting historical facts about ${landmark.trim()} in 3 sentences each. Keep it engaging and conversational. Return ONLY a valid JSON array of 5 strings, where each string is one fact (3 sentences). No markdown fences, no extra keys — just the raw JSON array.`;
+  if (landmark.trim().length > MAX_LANDMARK_LENGTH) {
+    return res.status(400).json({ error: `Landmark name too long. Maximum ${MAX_LANDMARK_LENGTH} characters.` });
+  }
+
+  // Strip HTML tags to prevent injection into prompts
+  const safeLandmark = landmark.trim().replace(/<[^>]*>/g, '');
+
+  // Return cached result if still fresh
+  const cacheKey = safeLandmark.toLowerCase();
+  const cached = factsCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < FACTS_CACHE_TTL_MS) {
+    return res.json({ facts: cached.facts, landmark: safeLandmark, cached: true });
+  }
+
+  const prompt = `You are a friendly travel guide. Tell me 5 interesting historical facts about ${safeLandmark} in 3 sentences each. Keep it engaging and conversational. Return ONLY a valid JSON array of 5 strings, where each string is one fact (3 sentences). No markdown fences, no extra keys — just the raw JSON array.`;
 
   try {
     const result = await geminiModel.generateContent(prompt);
@@ -160,20 +216,64 @@ app.post('/api/facts', async (req, res) => {
         .split(/\n(?=\d+[\.\)])/g)
         .map(s => s.replace(/^\d+[\.\)]\s*/, '').trim())
         .filter(Boolean)
-        .slice(0, 5);
+        .slice(0, FACTS_COUNT);
     }
 
-    return res.json({ facts: facts.slice(0, 5), landmark: landmark.trim() });
+    factsCache.set(cacheKey, { facts: facts.slice(0, FACTS_COUNT), ts: Date.now() });
+
+    return res.json({ facts: facts.slice(0, FACTS_COUNT), landmark: safeLandmark });
   } catch (err) {
     console.error('[/api/facts]', err.message);
     return res.status(500).json({ error: 'Failed to generate facts.', detail: err.message });
   }
 });
 
+/**
+ * POST /api/translate
+ * Translates a fact into the requested language using Gemini.
+ */
+app.post('/api/translate', async (req, res) => {
+  const { fact, language } = req.body || {};
+  if (!fact || typeof fact !== 'string' || fact.trim().length === 0) {
+    return res.status(400).json({ error: 'Missing or invalid "fact" field.' });
+  }
+  if (!language || typeof language !== 'string' || language.trim().length === 0) {
+    return res.status(400).json({ error: 'Missing or invalid "language" field.' });
+  }
+  if (process.env.MOCK_MODE === 'true') {
+    return res.json({ translated: `${fact.trim()} (translated to ${language.trim()})` });
+  }
+  const safeFact = fact.trim().replace(/<[^>]*>/g, '').slice(0, 2000);
+  const safeLang = language.trim().replace(/<[^>]*>/g, '').slice(0, 50);
+  try {
+    const result = await geminiModel.generateContent(
+      `Translate the following text to ${safeLang}. Return ONLY the translated text, nothing else:\n\n${safeFact}`
+    );
+    return res.json({ translated: result.response.text().trim() });
+  } catch (err) {
+    console.error('[/api/translate]', err.message);
+    return res.status(500).json({ error: 'Translation failed.', detail: err.message });
+  }
+});
+
 // ─── POST /api/nearby ────────────────────────────────────────
-// Accepts: JSON { lat, lng, radius? }
-// Returns: { places: [ { name, rating, type, photoUrl, placeId, vicinity } ] }
+/**
+ * POST /api/nearby
+ * Accepts: JSON { lat, lng, radius? }
+ * Fetches nearby tourist attractions and restaurants via Google Places API.
+ * @returns {{ places: Array<{ name, rating, category, photoUrl, placeId, vicinity, lat, lng }>, count: number }}
+ */
 app.post('/api/nearby', async (req, res) => {
+  const { lat, lng, radius = NEARBY_RADIUS_DEFAULT } = req.body || {};
+  if (lat == null || lng == null) {
+    return res.status(400).json({ error: 'Missing lat/lng fields.' });
+  }
+
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 ||
+      !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return res.status(400).json({ error: 'lat must be in [-90,90] and lng in [-180,180].' });
+  }
+
   if (process.env.MOCK_MODE === 'true') {
     return res.json({
       places: [
@@ -186,18 +286,13 @@ app.post('/api/nearby', async (req, res) => {
     });
   }
 
-  const { lat, lng, radius = 1000 } = req.body || {};
-  if (lat == null || lng == null) {
-    return res.status(400).json({ error: 'Missing lat/lng fields.' });
-  }
-
   const MAPS_KEY = process.env.GOOGLE_MAPS_API_KEY;
   if (!MAPS_KEY) {
     return res.status(500).json({ error: 'Maps API key not configured on server.' });
   }
 
   try {
-    // Fetch tourist attractions
+    // Parallel fetch — attractions and restaurants fetched concurrently
     const [attractionsRes, restaurantsRes] = await Promise.all([
       axios.get('https://maps.googleapis.com/maps/api/place/nearbysearch/json', {
         params: {
@@ -246,7 +341,11 @@ app.post('/api/nearby', async (req, res) => {
 });
 
 // ─── GET /api/config ─────────────────────────────────────────
-// Returns safe-to-expose config for the frontend (Maps embed key only)
+/**
+ * GET /api/config
+ * Returns safe-to-expose config for the frontend (Maps embed key only).
+ * @returns {{ mapsApiKey: string }}
+ */
 app.get('/api/config', (_, res) => {
   res.json({
     mapsApiKey: process.env.GOOGLE_MAPS_API_KEY || '',
@@ -260,8 +359,12 @@ app.use((err, req, res, _next) => {
 });
 
 // ─── Start ───────────────────────────────────────────────────
-app.listen(PORT, () => {
-  console.log(`🚀 Bon Voyage backend running on port ${PORT}`);
-  console.log(`   Gemini model : gemini-2.5-flash`);
-  console.log(`   Vision client: lazy (ADC)`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Bon Voyage backend running on port ${PORT}`);
+    console.log(`   Gemini model : gemini-2.5-flash`);
+    console.log(`   Vision client: lazy (ADC)`);
+  });
+}
+
+module.exports = app;
