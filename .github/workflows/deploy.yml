@@ -41,6 +41,7 @@ jobs:
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}
             ALLOWED_ORIGINS=https://bonvoyage-45fce.web.app,https://bonvoyage-45fce.firebaseapp.com
+            MOCK_MODE=true
 
   deploy-frontend:
     name: Deploy Hosting
