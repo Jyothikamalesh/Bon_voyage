@@ -6,7 +6,9 @@
 'use strict';
 
 // ─── Constants & State ───────────────────────────────────────
-const API_BASE = '/api';
+const API_BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'http://localhost:8080/api'
+  : '/api';
 let stream = null;
 let currentFacingMode = 'environment'; // Default to rear camera
 let mapsLoaded = false;
