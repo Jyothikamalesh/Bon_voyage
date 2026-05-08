@@ -19,6 +19,17 @@
   <!-- Maps JS API loaded dynamically in app.js after fetching key from /api/config -->
 
   <link rel="stylesheet" href="styles.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Bon Voyage",
+    "description": "AI-powered landmark explorer. Point your camera at any landmark to instantly discover its history, location, and nearby spots.",
+    "applicationCategory": "TravelApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+  }
+  </script>
 </head>
 <body>
 
@@ -28,7 +39,7 @@
   <header class="app-header" id="app-header">
     <div class="header-inner">
       <div class="logo">
-        <span class="logo-icon">✈</span>
+        <span class="logo-icon" aria-hidden="true">✈</span>
         <span class="logo-text">Bon <em>Voyage</em></span>
       </div>
       <p class="tagline">Point. Discover. Explore.</p>
@@ -39,14 +50,14 @@
   <!-- ═══════════════════════════════════════════════════════════ -->
   <!-- MAIN                                                        -->
   <!-- ═══════════════════════════════════════════════════════════ -->
-  <main class="main-container">
+  <main class="main-container" role="main">
 
     <!-- ── TAB SWITCHER ─────────────────────────────────────── -->
     <div class="tab-switcher">
-      <button class="tab-btn active" id="tab-scan">
+      <button class="tab-btn active" id="tab-scan" aria-label="Scan a landmark">
         <span>📷</span> Scan Landmark
       </button>
-      <button class="tab-btn" id="tab-explore">
+      <button class="tab-btn" id="tab-explore" aria-label="Explore nearby places">
         <span>📍</span> Explore Nearby
       </button>
     </div>
@@ -76,7 +87,7 @@
           <div class="photo-actions">
             <button class="btn btn-ghost" id="retake-btn">↩ Retake</button>
             <button class="btn btn-primary" id="identify-btn">
-              <span class="btn-icon">🔍</span>
+              <span class="btn-icon" aria-hidden="true">🔍</span>
               <span>Identify Landmark</span>
             </button>
           </div>
@@ -84,13 +95,13 @@
 
         <!-- Camera controls -->
         <div class="camera-controls" id="camera-controls">
-          <button class="btn btn-secondary" id="upload-btn" title="Upload photo from gallery">
+          <button class="btn btn-secondary" id="upload-btn" title="Upload photo from gallery" aria-label="Upload photo from gallery">
             <span>📁</span> Gallery
           </button>
           <button class="btn btn-capture" id="capture-btn" aria-label="Capture photo">
             <span class="capture-ring"></span>
           </button>
-          <button class="btn btn-secondary" id="flip-btn" title="Flip camera">
+          <button class="btn btn-secondary" id="flip-btn" title="Flip camera" aria-label="Flip camera">
             <span>🔄</span> Flip
           </button>
         </div>
@@ -167,12 +178,12 @@
     </section>
 
     <!-- ── RESULTS SECTION ───────────────────────────────────── -->
-    <section class="results-section" id="results-section" style="display:none">
+    <section class="results-section" id="results-section" style="display:none" aria-live="polite" tabindex="-1">
 
       <!-- Landmark Hero -->
       <div class="landmark-hero" id="landmark-hero">
-        <div class="landmark-badge" id="landmark-badge">
-          <span class="badge-icon">📍</span>
+        <div class="landmark-badge" id="landmark-badge" aria-describedby="confidence-text">
+          <span class="badge-icon" aria-hidden="true">📍</span>
           <span class="badge-label" id="landmark-name">Eiffel Tower</span>
         </div>
         <div class="confidence-pill" id="confidence-pill">
@@ -183,24 +194,38 @@
 
       <!-- Captured Image Thumbnail -->
       <div class="result-photo-row">
-        <img id="result-thumbnail" class="result-thumbnail" alt="Captured photo" />
+        <img id="result-thumbnail" class="result-thumbnail" alt="Captured photo of identified landmark" loading="lazy" />
       </div>
 
       <!-- Facts Section -->
       <div class="facts-section">
         <h2 class="section-title">
-          <span class="section-icon">📖</span>
+          <span class="section-icon" aria-hidden="true">📖</span>
           Historical Facts
         </h2>
         <div class="facts-grid" id="facts-grid">
           <!-- Injected by JS -->
+        </div>
+        <div class="translate-row" id="translate-row" style="display:none">
+          <select id="translate-lang" class="translate-select" aria-label="Select language to translate facts">
+            <option value="">Translate facts to…</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="German">German</option>
+            <option value="Japanese">Japanese</option>
+            <option value="Hindi">Hindi</option>
+            <option value="Arabic">Arabic</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Mandarin Chinese">Mandarin Chinese</option>
+          </select>
+          <button class="btn btn-ghost" id="translate-btn" aria-label="Translate historical facts">🌐 Translate</button>
         </div>
       </div>
 
       <!-- Map Section -->
       <div class="map-section">
         <h2 class="section-title">
-          <span class="section-icon">🗺️</span>
+          <span class="section-icon" aria-hidden="true">🗺️</span>
           Location
         </h2>
         <div class="map-wrapper" id="map-wrapper">
@@ -211,7 +236,7 @@
       <!-- Nearby Spots Section -->
       <div class="nearby-section" id="nearby-section">
         <button class="btn btn-nearby" id="nearby-btn">
-          <span class="btn-icon">🏛️</span>
+          <span class="btn-icon" aria-hidden="true">🏛️</span>
           <span>Discover Nearby Spots</span>
           <span class="nearby-badge">Top 5 within 1km</span>
         </button>
@@ -233,7 +258,7 @@
     <!-- ── ERROR SECTION ─────────────────────────────────────── -->
     <section class="error-section" id="error-section" style="display:none" role="alert">
       <div class="error-card">
-        <div class="error-icon">⚠️</div>
+        <div class="error-icon" aria-hidden="true">⚠️</div>
         <h2 class="error-title" id="error-title">Hmm, couldn't identify that</h2>
         <p class="error-message" id="error-message">Try a clearer photo of a famous landmark.</p>
         <button class="btn btn-primary" id="error-retry-btn">Try Again</button>
