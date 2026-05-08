@@ -15,7 +15,11 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-const visionClient = new vision.ImageAnnotatorClient();
+let visionClient = null;
+const getVisionClient = () => {
+  if (!visionClient) visionClient = new vision.ImageAnnotatorClient();
+  return visionClient;
+};
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 // Gemini 1.5 Flash — cheapest + smart
@@ -87,7 +91,7 @@ app.post('/api/identify', upload.single('image'), async (req, res) => {
       return res.status(400).json({ error: 'No image provided. Send multipart "image" field or JSON "imageBase64".' });
     }
 
-    const [result] = await visionClient.landmarkDetection({ image: { content: imageBuffer } });
+    const [result] = await getVisionClient().landmarkDetection({ image: { content: imageBuffer } });
     const landmarks = result.landmarkAnnotations || [];
 
     if (landmarks.length === 0) {
@@ -259,5 +263,5 @@ app.use((err, req, res, _next) => {
 app.listen(PORT, () => {
   console.log(`🚀 Bon Voyage backend running on port ${PORT}`);
   console.log(`   Gemini model : gemini-1.5-flash`);
-  console.log(`   Vision client: ${visionClient.auth?.projectId || 'ADC'}`);
+  console.log(`   Vision client: lazy (ADC)`);
 });
